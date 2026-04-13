@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品溯源验证</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg: #0b0b0c;
+            --panel: rgba(255,255,255,0.05);
+            --panel-border: rgba(255,255,255,0.1);
+            --text: #f5f1ea;
+            --muted: #b8aa97;
+            --gold: #d5a86e;
+            --gold-soft: rgba(213,168,110,0.18);
+            --danger: #ef7d7d;
+            --ok: #87d39b;
+            --warn: #f2c879;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            background: radial-gradient(circle at top, rgba(213,168,110,0.14), transparent 28%), linear-gradient(180deg, #111214 0%, #0b0b0c 40%, #090909 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .shell { width: 100%; max-width: 430px; margin: 0 auto; padding: 18px 14px 28px; }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(16px);
+            border-radius: 24px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.28);
+        }
+        .gold-line { height: 1px; background: linear-gradient(90deg, transparent, rgba(213,168,110,0.75), transparent); }
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+            border-radius: 999px; font-size: 12px; line-height: 1;
+            border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--muted);
+        }
+        .badge.ok { color: #dff7e6; background: rgba(135,211,155,0.14); border-color: rgba(135,211,155,0.28); }
+        .badge.warn { color: #fff0cc; background: rgba(242,200,121,0.14); border-color: rgba(242,200,121,0.28); }
+        .badge.danger { color: #ffe1e1; background: rgba(239,125,125,0.14); border-color: rgba(239,125,125,0.28); }
+        .label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+        .value { font-size: 15px; color: var(--text); line-height: 1.5; word-break: break-word; }
+        .hero-ring {
+            position: absolute; inset: -16px; border-radius: 999px;
+            background: radial-gradient(circle, rgba(213,168,110,0.16), transparent 62%);
+            filter: blur(20px); z-index: 0;
+        }
+        .hero-image {
+            position: relative; z-index: 1; width: 220px; height: 220px;
+            border-radius: 999px; object-fit: cover; border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.32); background: rgba(255,255,255,0.03);
+        }
+        .loading-mask {
+            position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(8,8,10,0.96); z-index: 50; transition: opacity .35s ease, visibility .35s ease;
+        }
+        .loading-mask.hidden { opacity: 0; visibility: hidden; }
+        .spinner {
+            width: 54px; height: 54px; border-radius: 999px;
+            border: 3px solid rgba(213,168,110,0.22); border-top-color: var(--gold);
+            animation: spin 0.9s linear infinite; margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fade-up { animation: fadeUp .55s ease; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading" class="loading-mask">
+        <div class="spinner"></div>
+        <div style="color: var(--gold);">正在验证商品信息...</div>
+        <div style="color: var(--muted); font-size: 12px; margin-top: 8px;">请稍候，系统正在读取该商品档案</div>
+    </div>
+
+    <main>
+        <section class="shell fade-up">
+            <div class="text-center pt-4">
+                <div class="text-[18px] text-[#d5a86e] font-semibold tracking-wider">Product Verification</div>
+                <div class="text-sm text-[#b8aa97] mt-1">商品溯源与验证信息</div>
+                <div class="mt-4">
+                    <span id="verifyBadge" class="badge">● 验证状态加载中...</span>
+                </div>
+            </div>
+
+            <div class="mt-4 gold-line"></div> 
+            
+            <div class="relative mt-7 flex justify-center"> 
+                <div class="hero-ring"></div> 
+                <img id="productImage" class="hero-image" src="" alt="商品图片" /> 
+            </div> 
+            
+            <div class="mt-6 text-center"> 
+                <div id="productName" class="text-[22px] font-semibold leading-snug"></div> 
+                <div id="productSubtitle" class="mt-2 text-sm text-[#b8aa97]"></div> 
+            </div> 
+            
+            <div class="mt-5 flex flex-wrap justify-center gap-2"> 
+                <div class="badge" id="materialTag">材质</div> 
+                <div class="badge" id="originTag">产地</div> 
+                <div class="badge" id="weightTag">克重</div> 
+            </div> 
+            
+            <div class="px-2 pb-5 mt-6"> 
+                <div class="grid grid-cols-2 gap-3"> 
+                    <div class="panel rounded-2xl p-4"> 
+                        <div class="label">商品编号</div> 
+                        <div class="value mt-1" id="productId"></div> 
+                    </div> 
+                    <div class="panel rounded-2xl p-4"> 
+                        <div class="label">验证状态</div> 
+                        <div class="value mt-1" id="verifyText"></div> 
+                    </div> 
+                    <div class="panel rounded-2xl p-4"> 
+                        <div class="label">首次验证时间</div> 
+                        <div class="value mt-1" id="firstVerifyTime"></div> 
+                    </div> 
+                    <div class="panel rounded-2xl p-4"> 
+                        <div class="label">录入批次</div> 
+                        <div class="value mt-1" id="batchNo"></div> 
+                    </div> 
+                </div> 
+                
+                <div class="mt-4 panel rounded-2xl p-4"> 
+                    <div class="label">商品说明</div> 
+                    <div class="value mt-2" id="productDesc"></div> 
+                </div> 
+                
+                <div class="mt-4 panel rounded-2xl p-4"> 
+                    <div class="label">规格信息</div> 
+                    <div class="mt-3 space-y-3 text-sm"> 
+                        <div class="flex items-start justify-between gap-4"> 
+                            <span class="label">主材</span> 
+                            <span class="value text-right" id="materialValue"></span> 
+                        </div> 
+                        <div class="flex items-start justify-between gap-4"> 
+                            <span class="label">尺寸</span> 
+                            <span class="value text-right" id="sizeValue"></span> 
+                        </div> 
+                        <div class="flex items-start justify-between gap-4"> 
+                            <span class="label">净重</span> 
+                            <span class="value text-right" id="weightValue"></span> 
+                        </div> 
+                        <div class="flex items-start justify-between gap-4"> 
+                            <span class="label">产地说明</span> 
+                            <span class="value text-right" id="originValue"></span> 
+                        </div> 
+                    </div> 
+                </div> 
+                
+                <div class="mt-4 panel rounded-2xl p-4"> 
+                    <div class="label">养护建议</div> 
+                    <ul class="mt-2 space-y-2 text-[14px] leading-6 text-[#f5f1ea]" id="careList"></ul> 
+                </div> 
+                
+                <div class="mt-4 panel rounded-2xl p-4"> 
+                    <div class="flex items-center justify-between gap-3"> 
+                        <div> 
+                            <div class="label">商家信息</div> 
+                            <div class="value mt-1" id="sellerName"></div> 
+                        </div> 
+                        <div class="text-right"> 
+                            <div class="label">联系方式</div> 
+                            <div class="value mt-1" id="sellerContact"></div> 
+                        </div> 
+                    </div> 
+                </div> 
+                
+                <div class="mt-6 text-center text-xs leading-5 text-[#8d7d6a]"> 
+                    本页面用于展示该商品的基础档案、录入批次与验证状态。<br> 
+                    若页面信息与实物不符，请联系商家进一步核验。 
+                </div> 
+            </div> 
+        </section>
+    </main>
+
+    <script>
+        const PRODUCT_DB = { 
+            "TR-JADE-2026-001": { 
+                productId: "TR-JADE-2026-001", 
+                name: "和田玉青白手串", 
+                subtitle: "甄选原料整理成串，附商品编号与录入档案", 
+                image: "https://images.unsplash.com/photo-1617038220319-276d3cfab638?auto=format&fit=crop&w=800&q=80", 
+                material: "和田玉青白料", 
+                size: "约 12mm 珠径 / 17颗", 
+                weight: "约 46.8g", 
+                origin: "新疆料源整理", 
+                desc: "该商品为天然材质饰品，页面展示内容用于说明商品基础信息、录入批次与当前验证状态。商品个体存在天然纹理、棉絮、色差等正常差异。", 
+                firstVerifyTime: "2026-04-14 11:28", 
+                batchNo: "BATCH-2026-04-A1", 
+                verifyState: "首次验证有效", 
+                verifyLevel: "ok", 
+                sellerName: "Wenting 选料工作室", 
+                sellerContact: "微信 / 手机自行替换", 
+                care: [ 
+                    "避免与硬物猛烈碰撞，单独存放更稳妥。", 
+                    "尽量远离香水、洗洁剂等化学制品。", 
+                    "日常佩戴后用软布轻拭，保持表面清洁。" 
+                ] 
+            }, 
+            "TR-JADE-2026-002": { 
+                productId: "TR-JADE-2026-002", 
+                name: "糖白玉随形吊坠", 
+                subtitle: "单件录入，支持验证状态展示", 
+                image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=800&q=80", 
+                material: "糖白玉", 
+                size: "约 33mm × 21mm × 10mm", 
+                weight: "约 18.2g", 
+                origin: "新疆料源整理", 
+                desc: "该吊坠为单件饰品，页面用于展示该件商品的基础信息与验证记录。天然材质的纹理、色带和局部棉结构均属正常现象。", 
+                firstVerifyTime: "2026-04-13 19:42", 
+                batchNo: "BATCH-2026-04-A2", 
+                verifyState: "已被验证过", 
+                verifyLevel: "warn", 
+                sellerName: "Wenting 选料工作室", 
+                sellerContact: "微信 / 手机自行替换", 
+                care: [ 
+                    "避免高温暴晒或骤冷骤热环境。", 
+                    "佩戴或把玩后可用干净软布轻轻擦拭。", 
+                    "如配有挂绳，请定期检查绳结和磨损情况。" 
+                ] 
+            } 
+        }; 
+
+        // 默认显示 001 号商品
+        const params = new URLSearchParams(window.location.search); 
+        const productId = params.get("id") || "TR-JADE-2026-001"; 
+        const product = PRODUCT_DB[productId]; 
+
+        function setText(id, value) { 
+            const el = document.getElementById(id); 
+            if (el) el.textContent = value || "-"; 
+        } 
+
+        function renderCare(list) { 
+            const careList = document.getElementById("careList"); 
+            careList.innerHTML = ""; 
+            (list || []).forEach(item => { 
+                const li = document.createElement("li"); 
+                li.textContent = "• " + item; 
+                careList.appendChild(li); 
+            }); 
+        } 
+
+        function renderProduct(data) { 
+            document.getElementById("productImage").src = data.image; 
+            setText("productName", data.name); 
+            setText("productSubtitle", data.subtitle); 
+            setText("productId", data.productId); 
+            setText("verifyText", data.verifyState); 
+            setText("firstVerifyTime", data.firstVerifyTime); 
+            setText("batchNo", data.batchNo); 
+            setText("productDesc", data.desc); 
+            setText("materialValue", data.material); 
+            setText("sizeValue", data.size); 
+            setText("weightValue", data.weight); 
+            setText("originValue", data.origin); 
+            setText("sellerName", data.sellerName); 
+            setText("sellerContact", data.sellerContact); 
+            setText("materialTag", data.material); 
+            setText("originTag", data.origin); 
+            setText("weightTag", data.weight); 
+            
+            const badge = document.getElementById("verifyBadge"); 
+            badge.className = "badge " + (data.verifyLevel || "ok"); 
+            badge.textContent = "● " + data.verifyState; 
+            renderCare(data.care); 
+        } 
+
+        function renderNotFound() { 
+            document.querySelector("main").innerHTML = ` 
+                <section class="shell fade-up"> 
+                    <div class="panel p-6 text-center" style="margin-top: 100px;"> 
+                        <div class="text-[22px] font-semibold text-[#ef7d7d]">未找到该商品信息</div> 
+                        <div class="mt-3 text-sm leading-6 text-[#b8aa97]"> 
+                            当前编号未录入系统，或链接参数有误。<br> 
+                            请联系商家重新核对该商品编号。 
+                        </div> 
+                    </div> 
+                </section> 
+            `; 
+        } 
+
+        setTimeout(() => { 
+            document.getElementById("loading").classList.add("hidden"); 
+            if (product) { 
+                renderProduct(product); 
+            } else { 
+                renderNotFound(); 
+            } 
+        }, 650);
+    </script>
+</body>
+</html>
